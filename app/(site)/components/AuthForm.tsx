@@ -1,18 +1,30 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import axios from "axios";
+import { useCallback, useEffect, useState } from "react";
 import { FieldValues, SubmitHandler, useForm } from "react-hook-form";
 import { BsGithub, BsGoogle } from "react-icons/bs";
 
 import Input from "@/components/Input";
 import Button from "@/components/Button";
 import AuthSocialButton from "./AuthSocialButton";
+import { toast } from "react-hot-toast";
+import { signIn, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 type Variant = "LOGIN" | "REGISTER";
 
 const AuthForm = () => {
+  const session = useSession();
+  const router = useRouter();
   const [variant, setVariant] = useState<Variant>("LOGIN");
   const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    if (session?.status === "authenticated") {
+      router.push("/users");
+    }
+  }, [session?.status, router]);
 
   const toggleVariant = useCallback(() => {
     if (variant === "LOGIN") {
@@ -29,7 +41,7 @@ const AuthForm = () => {
   } = useForm<FieldValues>({
     defaultValues: {
       name: "",
-      emaile: "",
+      email: "",
       password: "",
     },
   });
@@ -38,14 +50,46 @@ const AuthForm = () => {
     setIsLoading(true);
 
     if (variant === "REGISTER") {
+      axios
+        .post("/api/register", data)
+        .then(() => signIn("credentials", data))
+        .catch(() => toast.error("회원가입에 문제가 발생했습니다!🧐"))
+        .finally(() => setIsLoading(false));
     }
 
     if (variant === "LOGIN") {
+      signIn("credentials", {
+        ...data,
+        redirect: false,
+      })
+        .then((callback) => {
+          if (callback?.error) {
+            toast.error("잘못된 계정입니다.😭");
+          }
+
+          if (callback?.ok && !callback?.error) {
+            toast.success("로그인🥳");
+            router.push("/users");
+          }
+        })
+        .finally(() => setIsLoading(false));
     }
   };
 
   const socialAction = (action: string) => {
     setIsLoading(true);
+
+    signIn(action, { redirect: false })
+      .then((callback) => {
+        if (callback?.error) {
+          toast.error("깃허브 인증 실패!");
+        }
+
+        if (callback?.ok && !callback?.error) {
+          toast.success("깃허브 인증 성공!!");
+        }
+      })
+      .finally(() => setIsLoading(false));
   };
 
   return (
